@@ -1,4 +1,4 @@
-<div style="font-family: monospace;">
+<pre>
 // Very basic query
 MATCH (m:Movie)
 RETURN m;
@@ -210,4 +210,4 @@ match (movie:Movie {id: toint(line.movieId)})
 create (actor)-[acted:ACTED_IN]->(movie)
 set acted.roles = [line.role]
 return actor, acted, movie;
-</div>
+</pre>
