@@ -1,0 +1,213 @@
+<div style="font-family: monospace;">
+// Very basic query
+MATCH (m:Movie)
+RETURN m;
+
+// Aliases p, r, m
+match(p:Person)-[r:ACTED_IN]->(m:Movie)
+return p,r,m;
+
+// Global alias (there's another name for this)
+MATCH p = (:Person)-[:ACTED_IN]->(:Movie)
+return p;
+
+// Find people who acted in Top Gun
+match(p:Person)-[a:ACTED_IN]->(m:Movie)
+where m.title = "Top Gun"
+return p.name;
+
+// Specific person
+match(p:Person)-[a:ACTED_IN]->(m:Movie)
+where p.name starts with "Charlize"
+return p,a, m;
+
+// Aggregate count
+match(p:Person)-[a:ACTED_IN]->(m:Movie)
+return p.name, count(m) as movies;
+
+// Order and limit
+match(p:Person)-[a:ACTED_IN]->(m:Movie)
+return p.name, count(m) as movies
+order by p.name
+limit 3;
+
+// Regular expression
+match(p:Person)-[a:ACTED_IN]->(m:Movie)
+where m.title =~ ".*Gun*."
+return p, a, m;
+
+//others who have been in a Tom Hanks movie
+// distinct to avoid actors who have been in
+// multiple movies with Tom
+match (p:Person)-[:ACTED_IN]->(m:Movie),
+(other:Person)-[:ACTED_IN]->(m)
+where p.name = "Tom Hanks"
+return distinct other.name;
+
+// pattern in where clause
+match (p:Person) -[:WROTE] -> (m:Movie)
+where (p)-[:PRODUCED]->(m)
+return p.name, m.title;
+
+// OR condition use |
+match (p:Person) -[r:ACTED_IN|:DIRECTED] -> (m:Movie)
+where p.name ends with "DeVito"
+return p.name, type(r), m.title;
+
+// Query plan - for query tuning
+explain match (p:Person) -[r:ACTED_IN|:DIRECTED] -> (m:Movie)
+where p.name ends with "DeVito"
+return p.name, type(r), m.title;
+
+// aggregate values into an array
+match (p:Person) -[r:ACTED_IN] -> (m:Movie)
+where m.title contains "Matrix"
+return m.title, collect(p.name) as actors;
+
+// Find "Tom" who acted in
+// Return name and collection of movies
+MATCH (p:Person)-[r:ACTED_IN]->(m:Movie)
+where p.name starts with "Tom"
+return p.name, collect(m.title) as movie_title;
+
+// Find "Tom" who acted in
+// Return name and collection of movies
+// using range [0..3]
+MATCH (p:Person)-[r:ACTED_IN]->(m:Movie)
+where p.name starts with "Tom"
+return p.name, collect(m.title)[0..3] as movie_title;
+
+// Find "Tom" who acted in
+// Return name and collection of movies
+// optional match
+MATCH (p:Person)
+where p.name starts with "Tom"
+optional match (p)-[:DIRECTED]->(m:Movie)
+return p.name, collect(m.title) as movie_title;
+
+// WITH - sort of live HAVING in SQL
+// -- it is counting m for each p
+match(p:Person)-[:ACTED_IN]->(m:Movie)
+with p, collect(m.title) as movies
+where size(movies) > 5
+return p.name, movies
+
+// size in return
+match (p:Person)
+return p.name, size((p)-[:PRODUCED]->(:Movie)) as prod
+order by prod desc
+limit 5;
+
+// Variable length path min..max default = 1
+match p = (p1:Person)-[:ACTED_IN*..4]-(p2:Person)
+where p1.name = "Tom Cruise" and
+p2.name = "Kevin Bacon"
+return p;
+
+// Shortest path between
+match p = shortestPath((p1:Person)-[*]-(p2:Person))
+where p1.name = "Tom Cruise" and
+p2.name = "Kevin Bacon"
+return p;
+
+// Find the shortest path between Top Gun and
+// The Matrix through any relationship type
+// - allShortestPaths for all ties
+match m = shortestPath((m1:Movie)-[*]-(m2:Movie))
+where m1.title = "Top Gun" and m2.title = "The Matrix"
+return m;
+
+// Create a new movie
+create(m:Movie {title:"Mystic River", released: 2003})
+return m;
+
+// SET to update or add a property
+match(m:Movie {title: "Mystic River"})
+set m.tagline = "We bury our sins .."
+return m;
+
+// Create new Mystic River and Kevin Bacon relationship
+match (m:Movie {title: "Mystic River"})
+match (p:Person {name: "Kevin Bacon"})
+create(p)-[r:ACTED_IN {roles:["Sean"]}]->(m)
+return p,r,m;
+
+// Uniqueness constraint -- no same values on p.name (no 2 Tom Hanks)
+create constraint on (p:Person)
+
+// Check the constraints and indexex
+:schema
+
+// Handy refcard
+// http://neo4j.com/docs/2.3.3/cypher-refcard/
+
+// To update a property on node
+merge (p:Person {name: "Tom Hanks"})
+set p.oscar = true
+return p;
+
+// Delete - DETACH required if relationships exist
+match(p:Person {name:"Emil Eifrem"})
+detach delete p;
+assert p.name is unique;
+
+// Add new node Genre
+match (m:Movie {title: "The Matrix"})
+merge (action: Genre {name: "Action"})
+merge (scifi: Genre {name: "Sci-Fi"})
+merge (m)-[:IN_GENRE]->(action)
+merge (m)-[:IN_GENRE]->(scifi);
+
+// Add new node Genre
+match (m:Movie {title: "Mystic River"})
+merge (action: Genre {name: "Action"})
+merge (mystery: Genre {name: "Mystery"})
+merge (m)-[:IN_GENRE]->(action)
+merge (m)-[:IN_GENRE]->(mystery);
+
+// Clear the database
+match(n) detach delete n;
+
+// Create constraints first
+create constraint on (n:Movie) assert n.id is unique;
+create constraint on (n:Person) assert n.id is unique;
+
+// Load a CSV file from remote source
+load csv with headers
+from "http://neo4j.com/docs/stable/csv/intro/movies.csv"
+as line
+return line;
+
+// Load a CSV file from remote source
+// limited headers from CSV
+load csv with headers
+from "http://neo4j.com/docs/stable/csv/intro/movies.csv"
+as line
+return line.title, lineyear
+
+// load with nodes
+load csv with headers
+from "http://neo4j.com/docs/stable/csv/intro/movies.csv"
+as line
+create (m:Movie {id: toint(line.id)})
+set m.title = line.title,
+	m.released = toint(line.year)
+return m;
+
+load csv with headers
+from "http://neo4j.com/docs/stable/csv/intro/persons.csv"
+as line
+create (p:Person {id: toint(line.id)})
+set p.name = line.name
+return p;
+
+// Create the relationships
+load csv with headers
+from "http://neo4j.com/docs/stable/csv/intro/roles.csv"
+as line
+match (actor:Person {id: toint(line.personId)})
+match (movie:Movie {id: toint(line.movieId)})
+create (actor)-[acted:ACTED_IN]->(movie)
+set acted.roles = [line.role]
+return actor, acted, movie;
+</div>
